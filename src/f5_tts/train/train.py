@@ -68,7 +68,7 @@ def main(cfg):
     trainer.train(
         train_dataset,
         num_workers=cfg.datasets.num_workers,
-        resumable_with_seed=666,  # seed for shuffling dataset
+        resumable_with_seed=667,  # seed for shuffling dataset
     )
 
 
