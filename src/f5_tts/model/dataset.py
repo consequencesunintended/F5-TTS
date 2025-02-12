@@ -6,26 +6,27 @@ import torch.nn.functional as F
 import torchaudio
 from datasets import Dataset as Dataset_
 from datasets import load_from_disk
+from datasets import load_dataset as hf_load_dataset
 from torch import nn
-from torch.utils.data import Dataset, Sampler
+from torch.utils.data import IterableDataset, Dataset, Sampler
 from tqdm import tqdm
 
 from f5_tts.model.modules import MelSpec
 from f5_tts.model.utils import default
 
 
-class HFDataset(Dataset):
+class HFDataset(IterableDataset):
     def __init__(
         self,
-        hf_dataset: Dataset,
-        target_sample_rate=24_000,
+        hf_dataset,
+        target_sample_rate=24000,
         n_mel_channels=100,
         hop_length=256,
         n_fft=1024,
         win_length=1024,
         mel_spec_type="vocos",
     ):
-        self.data = hf_dataset
+        self.data = hf_dataset  # This is the streaming (iterable) dataset.
         self.target_sample_rate = target_sample_rate
         self.hop_length = hop_length
 
@@ -38,45 +39,35 @@ class HFDataset(Dataset):
             mel_spec_type=mel_spec_type,
         )
 
-    def get_frame_len(self, index):
-        row = self.data[index]
-        audio = row["audio"]["array"]
-        sample_rate = row["audio"]["sampling_rate"]
-        return audio.shape[-1] / sample_rate * self.target_sample_rate / self.hop_length
-
     def __len__(self):
-        return len(self.data)
+        return 100
 
-    def __getitem__(self, index):
-        row = self.data[index]
-        audio = row["audio"]["array"]
+    def __iter__(self):
+        for row in self.data:
+            audio = row["mp3"]["array"]  # Already a torch.Tensor due to .with_format("torch")
+            sample_rate = row["mp3"]["sampling_rate"]
+            duration = audio.shape[-1] / sample_rate
 
-        # logger.info(f"Audio shape: {audio.shape}")
+            # Skip samples that are too long or too short.
+            if duration > 30 or duration < 0.3:
+                continue
 
-        sample_rate = row["audio"]["sampling_rate"]
-        duration = audio.shape[-1] / sample_rate
+            # Resample if needed.
+            if sample_rate != self.target_sample_rate:
+                resampler = torchaudio.transforms.Resample(sample_rate, self.target_sample_rate)
+                audio = resampler(audio)
 
-        if duration > 30 or duration < 0.3:
-            return self.__getitem__((index + 1) % len(self.data))
+            # Add a channel dimension if necessary.
+            if audio.ndim == 1:
+                audio = audio.unsqueeze(0)
 
-        audio_tensor = torch.from_numpy(audio).float()
+            # Compute the mel spectrogram.
+            mel_spec = self.mel_spectrogram(audio)
+            mel_spec = mel_spec.squeeze(0)  # Remove extra channel dimension.
 
-        if sample_rate != self.target_sample_rate:
-            resampler = torchaudio.transforms.Resample(sample_rate, self.target_sample_rate)
-            audio_tensor = resampler(audio_tensor)
+            text = row["json"]["text"]
 
-        audio_tensor = audio_tensor.unsqueeze(0)  # 't -> 1 t')
-
-        mel_spec = self.mel_spectrogram(audio_tensor)
-
-        mel_spec = mel_spec.squeeze(0)  # '1 d t -> d t'
-
-        text = row["text"]
-
-        return dict(
-            mel_spec=mel_spec,
-            text=text,
-        )
+            yield {"mel_spec": mel_spec, "text": text}
 
 
 class CustomDataset(Dataset):
@@ -293,8 +284,10 @@ def load_dataset(
             + "May also the corresponding script cuz different dataset may have different format."
         )
         pre, post = dataset_name.split("_")
+        # from huggingface_hub import notebook_login
+        # notebook_login()
         train_dataset = HFDataset(
-            load_dataset(f"{pre}/{pre}", split=f"train.{post}", cache_dir=str(files("f5_tts").joinpath("../../data"))),
+            hf_load_dataset(f"{pre}/{post}", split="train", cache_dir=str(files("f5_tts").joinpath("../../data")), streaming=True).with_format("torch"),
         )
 
     return train_dataset
@@ -303,25 +296,34 @@ def load_dataset(
 # collation
 
 
+import torch
+import torch.nn.functional as F
+from torch.nn.utils.rnn import pad_sequence
+
 def collate_fn(batch):
+    # Process mel spectrograms
     mel_specs = [item["mel_spec"].squeeze(0) for item in batch]
     mel_lengths = torch.LongTensor([spec.shape[-1] for spec in mel_specs])
     max_mel_length = mel_lengths.amax()
 
     padded_mel_specs = []
-    for spec in mel_specs:  # TODO. maybe records mask for attention here
+    for spec in mel_specs:
         padding = (0, max_mel_length - spec.size(-1))
         padded_spec = F.pad(spec, padding, value=0)
         padded_mel_specs.append(padded_spec)
 
     mel_specs = torch.stack(padded_mel_specs)
 
-    text = [item["text"] for item in batch]
-    text_lengths = torch.LongTensor([len(item) for item in text])
+    # Convert text to token IDs (assuming character encoding)
+    tokenized_texts = [torch.tensor([ord(c) for c in item["text"]], dtype=torch.long) for item in batch]
+
+    # Pad text sequences
+    text_padded = pad_sequence(tokenized_texts, batch_first=True, padding_value=0)
+    text_lengths = torch.LongTensor([len(t) for t in tokenized_texts])
 
     return dict(
         mel=mel_specs,
         mel_lengths=mel_lengths,
-        text=text,
+        text=text_padded,  # Now a tensor, not a list of strings
         text_lengths=text_lengths,
     )
