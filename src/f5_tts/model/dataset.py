@@ -40,7 +40,7 @@ class HFDataset(IterableDataset):
         )
 
     def __len__(self):
-        return 100
+        return len(self.data)
 
     def __iter__(self):
         for row in self.data:
