@@ -291,7 +291,7 @@ def load_dataset(
         # notebook_login()
         train_dataset = HFDataset(
             # hf_load_dataset(f"{pre}/{pre}", split=f"train.{post}", cache_dir=str(files("f5_tts").joinpath("../../data"))),
-            hf_load_dataset("amphion/Emilia-Dataset",  data_dir="Emilia/KO", split="train").with_format("torch"),
+            hf_load_dataset("amphion/Emilia-Dataset",  data_dir="Emilia/FR", split="train").with_format("torch"),
         )
 
     return train_dataset
@@ -320,8 +320,8 @@ def collate_fn(batch):
 
     # Example: Convert characters to their ordinal values and then to a tensor.
     text = [
-        torch.tensor([ord(ch) for ch in item["text"]])
-        if isinstance(item["text"], str) else item["text"]
+        list(item["text"]) if isinstance(item["text"], str) else 
+        [chr(int(x)) for x in (item["text"].cpu() if item["text"].device.type != "cpu" else item["text"]).tolist()]
         for item in batch
     ]
     text_lengths = torch.LongTensor([len(t) for t in text])
