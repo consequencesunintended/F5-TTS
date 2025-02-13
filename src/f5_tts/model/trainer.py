@@ -388,13 +388,9 @@ class Trainer:
 
                     if self.log_samples and self.accelerator.is_local_main_process:
                         ref_audio_len = mel_lengths[0]
-                        if isinstance(text_inputs[0], torch.Tensor):
-                            text_inputs_list = text_inputs[0].tolist()  # Convert tensor to list of token IDs
-                        else:
-                            text_inputs_list = text_inputs[0]  # Keep as list if already a list
-
-                        # Concatenate properly
-                        infer_text = [text_inputs_list + [" "] + text_inputs_list]
+                        infer_text = [
+                            text_inputs[0] + ([" "] if isinstance(text_inputs[0], list) else " ") + text_inputs[0]
+                        ]
 
                         with torch.inference_mode():
                             generated, _ = self.accelerator.unwrap_model(self.model).sample(
