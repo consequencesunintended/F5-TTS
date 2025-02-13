@@ -41,6 +41,9 @@ class HFDataset(IterableDataset):
 
     def __len__(self):
         return len(self.data)
+    
+    def get_frame_len(self, index):
+        return self.data[index]["json"]["duration"] * self.target_sample_rate / self.hop_length
 
     def __iter__(self):
         for row in self.data:
@@ -287,7 +290,8 @@ def load_dataset(
         # from huggingface_hub import notebook_login
         # notebook_login()
         train_dataset = HFDataset(
-            hf_load_dataset(f"{pre}/{post}", split="train", cache_dir=str(files("f5_tts").joinpath("../../data")), streaming=True).with_format("torch"),
+            # hf_load_dataset(f"{pre}/{pre}", split=f"train.{post}", cache_dir=str(files("f5_tts").joinpath("../../data"))),
+            hf_load_dataset("amphion/Emilia-Dataset",  data_dir="Emilia/KO", split="train").with_format("torch"),
         )
 
     return train_dataset
@@ -314,16 +318,17 @@ def collate_fn(batch):
 
     mel_specs = torch.stack(padded_mel_specs)
 
-    # Convert text to token IDs (assuming character encoding)
-    tokenized_texts = [torch.tensor([ord(c) for c in item["text"]], dtype=torch.long) for item in batch]
-
-    # Pad text sequences
-    text_padded = pad_sequence(tokenized_texts, batch_first=True, padding_value=0)
-    text_lengths = torch.LongTensor([len(t) for t in tokenized_texts])
+    # Example: Convert characters to their ordinal values and then to a tensor.
+    text = [
+        torch.tensor([ord(ch) for ch in item["text"]])
+        if isinstance(item["text"], str) else item["text"]
+        for item in batch
+    ]
+    text_lengths = torch.LongTensor([len(t) for t in text])
 
     return dict(
         mel=mel_specs,
         mel_lengths=mel_lengths,
-        text=text_padded,  # Now a tensor, not a list of strings
+        text=text,
         text_lengths=text_lengths,
     )
