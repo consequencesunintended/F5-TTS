@@ -320,8 +320,8 @@ def collate_fn(batch):
 
     # Example: Convert characters to their ordinal values and then to a tensor.
     text = [
-        list(item["text"]) if isinstance(item["text"], str) else 
-        [chr(int(x)) for x in (item["text"].cpu() if item["text"].device.type != "cpu" else item["text"]).tolist()]
+        list([ch for ch in item["text"]])
+        if isinstance(item["text"], str) else item["text"]
         for item in batch
     ]
     text_lengths = torch.LongTensor([len(t) for t in text])
