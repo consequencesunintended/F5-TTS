@@ -7,8 +7,8 @@ from torch.utils.data import DataLoader, IterableDataset
 from torch.optim import AdamW
 import wandb
 import gc
-import torchaudio
 from datasets import load_dataset
+import torchaudio
 
 # Import your F5-TTS modules
 from f5_tts.model.modules import MelSpec
