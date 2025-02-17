@@ -7,8 +7,8 @@ from torch.utils.data import DataLoader, IterableDataset
 from torch.optim import AdamW
 import wandb
 import gc
-from datasets import load_dataset
 import torchaudio
+from datasets import load_dataset
 
 # Import your F5-TTS modules
 from f5_tts.model.modules import MelSpec
@@ -77,13 +77,17 @@ class HFDataset(IterableDataset):
             yield {"mel_spec": mel_spec, "text": text}
 
 def main():
-    # Write basic Accelerate config if needed
-    # (Uncomment and configure if necessary)
-    # from accelerate.utils import write_basic_config
-    # write_basic_config(mixed_precision="bf16")
-    
-    accelerator = Accelerator(dispatch_batches=False)
-    print("I was here")
+    from accelerate import Accelerator, DataLoaderConfiguration
+
+    # Create a configuration for DataLoader settings
+    dataloader_config = DataLoaderConfiguration(
+        dispatch_batches=False,  # Each process fetches its own batch
+        split_batches=True       # Split fetched batches across processes (if needed)
+    )
+
+    # Initialize Accelerator with the dataloader configuration
+    accelerator = Accelerator(dataloader_config=dataloader_config)
+       
     if accelerator.is_main_process:
         wandb.init(project="emilia")
     accelerator.wait_for_everyone()
