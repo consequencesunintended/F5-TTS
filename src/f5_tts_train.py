@@ -83,6 +83,7 @@ def main():
     # write_basic_config(mixed_precision="bf16")
     
     accelerator = Accelerator(dispatch_batches=False)
+    print("I was here")
     if accelerator.is_main_process:
         wandb.init(project="emilia")
     accelerator.wait_for_everyone()
