@@ -82,7 +82,7 @@ def main():
     # from accelerate.utils import write_basic_config
     # write_basic_config(mixed_precision="bf16")
     
-    accelerator = Accelerator()
+    accelerator = Accelerator(dispatch_batches=False)
     if accelerator.is_main_process:
         wandb.init(project="emilia")
     accelerator.wait_for_everyone()
@@ -162,4 +162,8 @@ def main():
     print("Training completed!")
 
 if __name__ == "__main__":
+    import sys
+    # Make sure Python sees our cloned F5-TTS code
+    # so we can import f5_tts.* directly
+    sys.path.append("/F5-TTS/src")
     main()
