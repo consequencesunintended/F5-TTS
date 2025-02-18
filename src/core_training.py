@@ -67,7 +67,7 @@ class HFDataset(IterableDataset):
             yield {"mel_spec": mel_spec, "text": text}
 
 
-def train(token):
+def train():
     print("Current working directory:", os.getcwd())
     wandb.init(project="emilia")
 
@@ -77,7 +77,6 @@ def train(token):
             "amphion/Emilia-Dataset",
             data_dir="Emilia/EN",
             split="train",
-            use_auth_token=token,
             streaming=True,
         ).with_format("torch")
     )
