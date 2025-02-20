@@ -336,13 +336,13 @@ class Trainer:
             if hasattr(train_dataloader, "batch_sampler") and hasattr(train_dataloader.batch_sampler, "set_epoch"):
                 train_dataloader.batch_sampler.set_epoch(epoch)
 
-            progress_bar = tqdm(
-                range(math.ceil(len(train_dataloader) / self.grad_accumulation_steps)),
-                desc=f"Epoch {epoch+1}/{self.epochs}",
-                unit="update",
-                disable=not self.accelerator.is_local_main_process,
-                initial=progress_bar_initial,
-            )
+            # progress_bar = tqdm(
+            #     range(math.ceil(len(train_dataloader) / self.grad_accumulation_steps)),
+            #     desc=f"Epoch {epoch+1}/{self.epochs}",
+            #     unit="update",
+            #     disable=not self.accelerator.is_local_main_process,
+            #     initial=progress_bar_initial,
+            # )
 
             for batch in current_dataloader:
                 with self.accelerator.accumulate(self.model):
@@ -372,8 +372,8 @@ class Trainer:
                         self.ema_model.update()
 
                     global_update += 1
-                    progress_bar.update(1)
-                    progress_bar.set_postfix(update=str(global_update), loss=loss.item())
+                    # progress_bar.update(1)
+                    # progress_bar.set_postfix(update=str(global_update), loss=loss.item())
 
                 if self.accelerator.is_local_main_process:
                     self.accelerator.log(
