@@ -384,6 +384,7 @@ class Trainer:
                         self.writer.add_scalar("lr", self.scheduler.get_last_lr()[0], global_update)
 
                 if global_update % self.save_per_updates == 0 and self.accelerator.sync_gradients:
+                    print(f'loss:{loss.item()}')
                     self.save_checkpoint(global_update)
 
                     if self.log_samples and self.accelerator.is_local_main_process:
