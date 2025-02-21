@@ -304,31 +304,39 @@ import torch
 import torch.nn.functional as F
 from torch.nn.utils.rnn import pad_sequence
 
-def collate_fn(batch):
-    # Process mel spectrograms
-    mel_specs = [item["mel_spec"].squeeze(0) for item in batch]
+def collate_fn(batch, vocab_char_map):
+    # Mels
+    mel_specs = [item["mel_spec"] for item in batch]
     mel_lengths = torch.LongTensor([spec.shape[-1] for spec in mel_specs])
-    max_mel_length = mel_lengths.amax()
+    max_mel_length = mel_lengths.max()
 
-    padded_mel_specs = []
+    # Pad all mel_specs to the same time dimension
+    padded_mels = []
     for spec in mel_specs:
-        padding = (0, max_mel_length - spec.size(-1))
-        padded_spec = F.pad(spec, padding, value=0)
-        padded_mel_specs.append(padded_spec)
+        padding_needed = max_mel_length - spec.size(-1)
+        padded = F.pad(spec, (0, padding_needed), value=0)
+        padded_mels.append(padded)
+    mel_specs = torch.stack(padded_mels)  # (B, n_mels, T)
 
-    mel_specs = torch.stack(padded_mel_specs)
+    # Text
+    max_text_length = max(len(item["text"]) for item in batch)
+    text_tensor = torch.zeros(len(batch), max_text_length, dtype=torch.long)
+    text_lengths = []
 
-    # Example: Convert characters to their ordinal values and then to a tensor.
-    text = [
-        list([ch for ch in item["text"]])
-        if isinstance(item["text"], str) else item["text"]
-        for item in batch
-    ]
-    text_lengths = torch.LongTensor([len(t) for t in text])
+    for i, item in enumerate(batch):
+        text = item["text"]
+        text_length = len(text)
+        text_lengths.append(text_length)
 
-    return dict(
-        mel=mel_specs,
-        mel_lengths=mel_lengths,
-        text=text,
-        text_lengths=text_lengths,
-    )
+        for j, char in enumerate(text):
+            if j < max_text_length:
+                text_tensor[i, j] = vocab_char_map.get(char, 0)
+
+    text_lengths = torch.LongTensor(text_lengths)
+
+    return {
+        "mel": mel_specs,
+        "mel_lengths": mel_lengths,
+        "text": text_tensor,
+        "text_lengths": text_lengths,
+    }

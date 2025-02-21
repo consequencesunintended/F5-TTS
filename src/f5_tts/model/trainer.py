@@ -264,10 +264,12 @@ class Trainer:
         else:
             generator = None
 
+        
+
         if self.batch_size_type == "sample":
             train_dataloader = DataLoader(
                 train_dataset,
-                collate_fn=collate_fn,
+                collate_fn=lambda batch: collate_fn(batch, self.model.vocab_char_map),
                 num_workers=num_workers,
                 pin_memory=True,
                 persistent_workers=True,
@@ -286,7 +288,7 @@ class Trainer:
             )
             train_dataloader = DataLoader(
                 train_dataset,
-                collate_fn=collate_fn,
+                collate_fn=lambda batch: collate_fn(batch, self.model.vocab_char_map),
                 num_workers=num_workers,
                 pin_memory=True,
                 persistent_workers=True,
