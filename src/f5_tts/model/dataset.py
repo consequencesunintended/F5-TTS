@@ -25,10 +25,14 @@ class HFDataset(IterableDataset):
         n_fft=1024,
         win_length=1024,
         mel_spec_type="vocos",
+        num_processes=1,  # Add num_processes parameter
+        process_index=0,  # Add process_index parameter
     ):
-        self.data = hf_dataset  # This is the streaming (iterable) dataset.
+        self.data = hf_dataset
         self.target_sample_rate = target_sample_rate
         self.hop_length = hop_length
+        self.num_processes = num_processes
+        self.process_index = process_index
 
         self.mel_spectrogram = MelSpec(
             n_fft=n_fft,
@@ -38,39 +42,33 @@ class HFDataset(IterableDataset):
             target_sample_rate=target_sample_rate,
             mel_spec_type=mel_spec_type,
         )
-
+    
     def __len__(self):
         return len(self.data)
-    
-    def get_frame_len(self, index):
-        return self.data[index]["json"]["duration"] * self.target_sample_rate / self.hop_length
 
     def __iter__(self):
         for row in self.data:
-            audio = row["mp3"]["array"]  # Already a torch.Tensor due to .with_format("torch")
+            audio = row["mp3"]["array"]
             sample_rate = row["mp3"]["sampling_rate"]
             duration = audio.shape[-1] / sample_rate
 
-            # Skip samples that are too long or too short.
             if duration > 30 or duration < 0.3:
                 continue
 
-            # Resample if needed.
             if sample_rate != self.target_sample_rate:
                 resampler = torchaudio.transforms.Resample(sample_rate, self.target_sample_rate)
                 audio = resampler(audio)
 
-            # Add a channel dimension if necessary.
             if audio.ndim == 1:
                 audio = audio.unsqueeze(0)
 
-            # Compute the mel spectrogram.
             mel_spec = self.mel_spectrogram(audio)
-            mel_spec = mel_spec.squeeze(0)  # Remove extra channel dimension.
+            mel_spec = mel_spec.squeeze(0)
 
             text = row["json"]["text"]
-
             yield {"mel_spec": mel_spec, "text": text}
+
+
 
 
 class CustomDataset(Dataset):
