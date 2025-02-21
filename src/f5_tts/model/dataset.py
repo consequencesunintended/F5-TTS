@@ -44,7 +44,7 @@ class HFDataset(IterableDataset):
         )
     
     def __len__(self):
-        return len(self.data)
+        return 29569320
 
     def __iter__(self):
         for row in self.data:
