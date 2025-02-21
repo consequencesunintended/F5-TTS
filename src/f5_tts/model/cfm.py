@@ -82,7 +82,7 @@ class CFM(nn.Module):
     def sample(
         self,
         cond: float["b n d"] | float["b nw"],  # noqa: F722
-        text: int["b nt"] | list[str],  # noqa: F722
+        text,
         duration: int | int["b"],  # noqa: F821
         *,
         lens: int["b"] | None = None,  # noqa: F821
@@ -112,13 +112,6 @@ class CFM(nn.Module):
             lens = torch.full((batch,), cond_seq_len, device=device, dtype=torch.long)
 
         # text
-
-        if isinstance(text, list):
-            if exists(self.vocab_char_map):
-                text = list_str_to_idx(text, self.vocab_char_map).to(device)
-            else:
-                text = list_str_to_tensor(text).to(device)
-            assert text.shape[0] == batch
 
         # duration
 
@@ -209,7 +202,7 @@ class CFM(nn.Module):
     def forward(
         self,
         inp: float["b n d"] | float["b nw"],  # mel or raw wave  # noqa: F722
-        text: int["b nt"] | list[str],  # noqa: F722
+        text,  # noqa: F722
         *,
         lens: int["b"] | None = None,  # noqa: F821
         noise_scheduler: str | None = None,
@@ -221,14 +214,6 @@ class CFM(nn.Module):
             assert inp.shape[-1] == self.num_channels
 
         batch, seq_len, dtype, device, _σ1 = *inp.shape[:2], inp.dtype, self.device, self.sigma
-
-        # handle text as string
-        if isinstance(text, list):
-            if exists(self.vocab_char_map):
-                text = list_str_to_idx(text, self.vocab_char_map).to(device)
-            else:
-                text = list_str_to_tensor(text).to(device)
-            assert text.shape[0] == batch
 
         # lens and mask
         if not exists(lens):

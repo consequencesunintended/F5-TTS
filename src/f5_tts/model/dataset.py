@@ -12,8 +12,11 @@ from torch.utils.data import IterableDataset, Dataset, Sampler
 from tqdm import tqdm
 
 from f5_tts.model.modules import MelSpec
-from f5_tts.model.utils import default
-
+from f5_tts.model.utils import (
+    default,
+    list_str_to_idx,
+    list_str_to_tensor,
+)
 
 class HFDataset(IterableDataset):
     def __init__(
@@ -304,28 +307,34 @@ import torch
 import torch.nn.functional as F
 from torch.nn.utils.rnn import pad_sequence
 
-def collate_fn(batch):
-
-    mel_specs = [item["mel_spec"].squeeze(0) for item in batch]
+def collate_fn(batch, vocab_char_map):
+    # Mels
+    mel_specs = [item["mel_spec"] for item in batch]
     mel_lengths = torch.LongTensor([spec.shape[-1] for spec in mel_specs])
-    max_mel_length = mel_lengths.amax()
+    max_mel_length = mel_lengths.max()
 
-    padded_mel_specs = []
-    for spec in mel_specs:  # TODO. maybe records mask for attention here
-        padding = (0, max_mel_length - spec.size(-1))
-        padded_spec = F.pad(spec, padding, value=0)
-        padded_mel_specs.append(padded_spec)
+    # Pad all mel_specs to the same time dimension
+    padded_mels = []
+    for spec in mel_specs:
+        padding_needed = max_mel_length - spec.size(-1)
+        padded = F.pad(spec, (0, padding_needed), value=0)
+        padded_mels.append(padded)
+    mel_specs = torch.stack(padded_mels)  # (B, n_mels, T)
 
-    mel_specs = torch.stack(padded_mel_specs)
+    # Text
+    max_text_length = max(len(item["text"]) for item in batch)
+    text_tensor = torch.zeros(len(batch), max_text_length, dtype=torch.long)
+    text_lengths = []
 
     text = [item["text"] for item in batch]
-    text_lengths = torch.LongTensor([len(item) for item in text])
+    text = list_str_to_idx(text, vocab_char_map)
 
-    out_dict =  {
+    text_lengths = torch.LongTensor(text_lengths)
+
+
+    return {
         "mel": mel_specs,
         "mel_lengths": mel_lengths,
-        "text": text,         # now always a list of chars/tokens
+        "text": text_tensor,
         "text_lengths": text_lengths,
     }
-
-    return out_dict
