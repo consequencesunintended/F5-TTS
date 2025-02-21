@@ -234,6 +234,8 @@ def load_dataset(
     tokenizer: str = "pinyin",
     dataset_type: str = "CustomDataset",
     audio_type: str = "raw",
+    num_processes = 1, 
+    process_index = 0,
     mel_spec_module: nn.Module | None = None,
     mel_spec_kwargs: dict = dict(),
 ) -> CustomDataset | HFDataset:
@@ -289,7 +291,7 @@ def load_dataset(
         # notebook_login()
         train_dataset = HFDataset(
             # hf_load_dataset(f"{pre}/{pre}", split=f"train.{post}", cache_dir=str(files("f5_tts").joinpath("../../data"))),
-            hf_load_dataset("amphion/Emilia-Dataset",  data_dir="Emilia/KO", split="train").with_format("torch"),
+            hf_load_dataset("amphion/Emilia-Dataset",  data_dir="Emilia/EN", split="train", streaming=True).shard(num_processes, process_index).with_format("torch"),
         )
 
     return train_dataset

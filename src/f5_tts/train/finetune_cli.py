@@ -171,7 +171,7 @@ def main():
         bnb_optimizer=args.bnb_optimizer,
     )
 
-    train_dataset = load_dataset(args.dataset_name, tokenizer, args.dataset_type, mel_spec_kwargs=mel_spec_kwargs)
+    train_dataset = load_dataset(args.dataset_name, tokenizer, args.dataset_type, num_processes = self.accelerator.num_processes, process_index = self.accelerator.process_index, mel_spec_kwargs=mel_spec_kwargs)
 
     trainer.train(
         train_dataset,
