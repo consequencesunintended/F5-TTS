@@ -94,6 +94,27 @@ def list_str_to_idx(
     text = pad_sequence(list_idx_tensors, padding_value=padding_value, batch_first=True)
     return text
 
+def idx_to_list_str(
+    idx_tensor: torch.Tensor,  # shape: (batch_size, seq_len)
+    vocab_char_map: dict[str, int],
+    padding_value: int = -1,
+) -> list[str]:
+    # Create reverse mapping: index -> char
+    idx_to_char = {idx: char for char, idx in vocab_char_map.items()}
+    
+    # Decode each sequence in the tensor into a string
+    decoded_texts = []
+    for seq in idx_tensor:
+        # Convert tensor row to list of indices, ignoring padding_value
+        # You might need to convert tensor elements to int if they are not already
+        chars = [
+            idx_to_char.get(int(idx.item()), '') 
+            for idx in seq 
+            if int(idx.item()) != padding_value
+        ]
+        decoded_texts.append(''.join(chars))
+    
+    return decoded_texts
 
 # Get tokenizer
 
