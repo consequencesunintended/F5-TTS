@@ -54,11 +54,18 @@ class Trainer:
     ):
         ddp_kwargs = DistributedDataParallelKwargs(find_unused_parameters=True)
 
+        # Initialize the Accelerator for distributed training
+        dataloader_config = accelerate.DataLoaderConfiguration(
+            dispatch_batches=False,
+            split_batches=False,
+        )
+
         if logger == "wandb" and not wandb.api.api_key:
             logger = None
         self.log_samples = log_samples
 
         self.accelerator = Accelerator(
+            dataloader_config=dataloader_config,
             log_with=logger if logger == "wandb" else None,
             kwargs_handlers=[ddp_kwargs],
             gradient_accumulation_steps=grad_accumulation_steps,
