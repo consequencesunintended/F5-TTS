@@ -7,7 +7,7 @@ import os
 import torch
 import torchaudio
 import wandb
-from accelerate import Accelerator
+from accelerate import Accelerator, DataLoaderConfiguration
 from accelerate.utils import DistributedDataParallelKwargs
 from ema_pytorch import EMA
 from torch.optim import AdamW
@@ -55,7 +55,7 @@ class Trainer:
         ddp_kwargs = DistributedDataParallelKwargs(find_unused_parameters=True)
 
         # Initialize the Accelerator for distributed training
-        dataloader_config = accelerate.DataLoaderConfiguration(
+        dataloader_config = DataLoaderConfiguration(
             dispatch_batches=False,
             split_batches=False,
         )
