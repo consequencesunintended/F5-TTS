@@ -17,7 +17,7 @@ from tqdm import tqdm
 
 from f5_tts.model import CFM
 from f5_tts.model.dataset import DynamicBatchSampler, collate_fn
-from f5_tts.model.utils import default, exists, idx_to_list_str
+from f5_tts.model.utils import default, exists, idx_to_list_str, list_str_to_idx
 
 # trainer
 
@@ -391,10 +391,13 @@ class Trainer:
 
                     if self.log_samples and self.accelerator.is_local_main_process:
                         ref_audio_len = mel_lengths[0]
-                        actual_text = idx_to_list_str(text_inputs[0])
+                        actual_text = idx_to_list_str(text_inputs, self.model.vocab_char_map)
+                        actual_text = actual_text[0]
+
                         infer_text = [
                             actual_text + ([" "] if isinstance(actual_text, list) else " ") + actual_text
                         ]
+                        infer_text = list_str_to_idx(infer_text, self.model.vocab_char_map).to(self.accelerator.device)
 
                         with torch.inference_mode():
                             generated, _ = self.accelerator.unwrap_model(self.model).sample(
