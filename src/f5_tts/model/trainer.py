@@ -323,23 +323,13 @@ class Trainer:
         start_update = self.load_checkpoint()
         global_update = start_update
 
-        if exists(resumable_with_seed):
-            orig_epoch_step = len(train_dataloader)
-            start_step = start_update * self.grad_accumulation_steps
-            skipped_epoch = int(start_step // orig_epoch_step)
-            skipped_batch = start_step % orig_epoch_step
-            skipped_dataloader = self.accelerator.skip_first_batches(train_dataloader, num_batches=skipped_batch)
-        else:
-            skipped_epoch = 0
+        skipped_epoch = 0
 
         for epoch in range(skipped_epoch, self.epochs):
             self.model.train()
-            if exists(resumable_with_seed) and epoch == skipped_epoch:
-                progress_bar_initial = math.ceil(skipped_batch / self.grad_accumulation_steps)
-                current_dataloader = skipped_dataloader
-            else:
-                progress_bar_initial = 0
-                current_dataloader = train_dataloader
+            progress_bar_initial = 0
+            current_dataloader = train_dataloader
+
 
             # Set epoch for the batch sampler if it exists
             if hasattr(train_dataloader, "batch_sampler") and hasattr(train_dataloader.batch_sampler, "set_epoch"):
