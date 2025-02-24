@@ -52,8 +52,8 @@ class HFDataset(IterableDataset):
 
     def __iter__(self):
         for row in self.data:
-            audio = row["mp3"]["array"]
-            sample_rate = row["mp3"]["sampling_rate"]
+            audio = row["audio"]["array"]
+            sample_rate = row["audio"]["sampling_rate"]
             duration = audio.shape[-1] / sample_rate
 
             if duration > 30 or duration < 0.3:
@@ -69,7 +69,7 @@ class HFDataset(IterableDataset):
             mel_spec = self.mel_spectrogram(audio)
             mel_spec = mel_spec.squeeze(0)
 
-            text = row["json"]["text"]
+            text = row["transcript"]
             yield {"mel_spec": mel_spec, "text": text}
 
 
