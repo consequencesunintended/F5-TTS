@@ -295,7 +295,7 @@ def load_dataset(
         # notebook_login()
         train_dataset = HFDataset(
             # hf_load_dataset(f"{pre}/{pre}", split=f"train.{post}", cache_dir=str(files("f5_tts").joinpath("../../data"))),
-            hf_load_dataset("amphion/Emilia-Dataset",  data_dir="Emilia/EN", split="train", streaming=True).shard(num_processes, process_index).with_format("torch"),
+            hf_load_dataset("parler-tts/mls_eng", split="train", streaming=True).shard(num_processes, process_index).with_format("torch"),
         )
 
     return train_dataset
