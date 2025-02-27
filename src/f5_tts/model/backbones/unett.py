@@ -119,7 +119,7 @@ class UNetT(nn.Module):
         self.text_embed = TextEmbedding(text_num_embeds, text_dim, conv_layers=conv_layers)
         self.input_embed = InputEmbedding(mel_dim, text_dim, dim)
 
-        # self.rotary_embed = RotaryEmbedding(dim_head)
+        self.rotary_embed = RotaryEmbedding(dim_head)
 
         # transformer layers & skip connections
 
