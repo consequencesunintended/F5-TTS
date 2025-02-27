@@ -161,7 +161,9 @@ class Trainer:
                 os.makedirs(self.checkpoint_path)
             if last:
                 self.accelerator.save(checkpoint, f"{self.checkpoint_path}/model_last.pt")
-                wandb.save(f"{self.checkpoint_path}/model_last.pt")
+                artifact = wandb.Artifact("my-model-checkpoint", type="model")
+                artifact.add_file(checkpoint_path)
+                wandb.log_artifact(artifact)
                 print(f"Saved last checkpoint at update {update}")
             else:
                 if self.keep_last_n_checkpoints == 0:
