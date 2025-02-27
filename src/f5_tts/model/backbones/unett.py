@@ -16,6 +16,7 @@ import torch.nn.functional as F
 
 from x_transformers import RMSNorm
 from x_transformers.x_transformers import RotaryEmbedding
+from x_transformers import Attention as XAttn
 
 from f5_tts.model.modules import (
     TimestepEmbedding,
@@ -133,12 +134,20 @@ class UNetT(nn.Module):
             is_later_half = idx >= (depth // 2)
 
             attn_norm = RMSNorm(dim)
-            attn = Attention(
-                processor=AttnProcessor(),
-                dim=dim,
-                heads=heads,
-                dim_head=dim_head,
-                dropout=dropout,
+            # attn = Attention(
+            #     processor=AttnProcessor(),
+            #     dim=dim,
+            #     heads=heads,
+            #     dim_head=dim_head,
+            #     dropout=dropout,
+            # )
+
+            attn = XAttn(
+                dim = dim,
+                heads = heads,
+                dim_head = dim_head,
+                dropout = dropout,
+                flash = True   # or attn_type='flash'
             )
 
             ff_norm = RMSNorm(dim)
@@ -209,7 +218,7 @@ class UNetT(nn.Module):
                     x = x + skip
 
             # attention and feedforward blocks
-            x = attn(attn_norm(x), rope=rope, mask=mask) + x
+            x = attn(attn_norm(x), rotary_pos_emb=rope, mask=mask) + x
             x = ff(ff_norm(x)) + x
 
         assert len(skips) == 0
