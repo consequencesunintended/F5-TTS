@@ -15,7 +15,7 @@ from torch import nn
 import torch.nn.functional as F
 
 from x_transformers import RMSNorm
-from x_transformers.x_transformers import RotaryEmbedding
+# from x_transformers.x_transformers import RotaryEmbedding
 from x_transformers import Attention as XAttn
 
 from f5_tts.model.modules import (
@@ -119,7 +119,7 @@ class UNetT(nn.Module):
         self.text_embed = TextEmbedding(text_num_embeds, text_dim, conv_layers=conv_layers)
         self.input_embed = InputEmbedding(mel_dim, text_dim, dim)
 
-        self.rotary_embed = RotaryEmbedding(dim_head)
+        # self.rotary_embed = RotaryEmbedding(dim_head)
 
         # transformer layers & skip connections
 
@@ -147,6 +147,7 @@ class UNetT(nn.Module):
                 heads = heads,
                 dim_head = dim_head,
                 dropout = dropout,
+                rotary_pos_emb=True,
                 flash = True   # or attn_type='flash'
             )
 
@@ -194,7 +195,7 @@ class UNetT(nn.Module):
         if mask is not None:
             mask = F.pad(mask, (1, 0), value=1)
 
-        rope = self.rotary_embed.forward_from_seq_len(seq_len + 1)
+        # rope = self.rotary_embed.forward_from_seq_len(seq_len + 1)
 
         # flat unet transformer
         skip_connect_type = self.skip_connect_type
@@ -218,7 +219,7 @@ class UNetT(nn.Module):
                     x = x + skip
 
             # attention and feedforward blocks
-            x = attn(attn_norm(x), rope=rope, mask=mask) + x
+            x = attn(attn_norm(x), mask=mask) + x
             x = ff(ff_norm(x)) + x
 
         assert len(skips) == 0
