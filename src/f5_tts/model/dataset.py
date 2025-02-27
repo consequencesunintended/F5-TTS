@@ -323,14 +323,14 @@ def collate_fn(batch, vocab_char_map):
     mel_specs = torch.stack(padded_mels)  # (B, n_mels, T)
 
     # Text
-    max_text_length = max(len(item["text"]) for item in batch)
-    text_tensor = torch.zeros(len(batch), max_text_length, dtype=torch.long)
-    text_lengths = []
+    # max_text_length = max(len(item["text"]) for item in batch)
+    # text_tensor = torch.zeros(len(batch), max_text_length, dtype=torch.long)
+    # text_lengths = []
 
     org_text = [item["text"] for item in batch]
     text = list_str_to_idx(org_text, vocab_char_map)
 
-    text_lengths = torch.LongTensor(text_lengths)
+    text_lengths = torch.LongTensor([len(item) for item in text])
 
 
     return {
