@@ -322,20 +322,11 @@ def collate_fn(batch, vocab_char_map):
         padded_mels.append(padded)
     mel_specs = torch.stack(padded_mels)  # (B, n_mels, T)
 
-    # Text
-    # max_text_length = max(len(item["text"]) for item in batch)
-    # text_tensor = torch.zeros(len(batch), max_text_length, dtype=torch.long)
-    # text_lengths = []
-
     org_text = [item["text"] for item in batch]
-    text = list_str_to_idx(org_text, vocab_char_map)
-
-    text_lengths = torch.LongTensor([len(item) for item in text])
-
+    text = list_str_to_tensor(org_text)
 
     return {
         "mel": mel_specs,
         "mel_lengths": mel_lengths,
-        "text": text,
-        "text_lengths": text_lengths,
+        "text": text
     }

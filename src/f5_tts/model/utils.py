@@ -83,6 +83,16 @@ def list_str_to_tensor(text: list[str], padding_value=-1) -> int["b nt"]:  # noq
     text = pad_sequence(list_tensors, padding_value=padding_value, batch_first=True)
     return text
 
+def tensor_to_list_str(tensor: torch.Tensor, padding_value=-1) -> list[str]:
+    list_str = []
+    for row in tensor:
+        # Convert the row to a list of integers and filter out padding values
+        byte_vals = [b for b in row.tolist() if b != padding_value]
+        # Convert the list of ints back to bytes and then decode to a string
+        s = bytes(byte_vals).decode("UTF-8")
+        list_str.append(s)
+    return list_str
+
 
 # char tokenizer, based on custom dataset's extracted .txt file
 def list_str_to_idx(
