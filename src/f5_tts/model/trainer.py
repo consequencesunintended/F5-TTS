@@ -277,9 +277,9 @@ class Trainer:
             train_dataloader = DataLoader(
                 train_dataset,
                 collate_fn=lambda batch: collate_fn(batch, self.model.module.vocab_char_map if hasattr(self.model, 'module') else self.model.vocab_char_map),
-                num_workers=num_workers,
+                num_workers=0,
                 pin_memory=True,
-                persistent_workers=True,
+                persistent_workers=False,
                 batch_size=self.batch_size,
                 generator=generator,
             )
