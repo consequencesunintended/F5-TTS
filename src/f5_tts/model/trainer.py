@@ -118,7 +118,7 @@ class Trainer:
         self.save_per_updates = save_per_updates
         self.keep_last_n_checkpoints = keep_last_n_checkpoints
         self.last_per_updates = default(last_per_updates, save_per_updates)
-        self.checkpoint_path = default(checkpoint_path, "ckpts/test_e2-tts")
+        self.checkpoint_path = "/root/modal_persistant/"
 
         self.batch_size = batch_size
         self.batch_size_type = batch_size_type
@@ -161,7 +161,6 @@ class Trainer:
                 os.makedirs(self.checkpoint_path)
             if last:
                 self.accelerator.save(checkpoint, f"{self.checkpoint_path}/model_last.pt")
-                wandb.save(f"{self.checkpoint_path}/model_last.pt")
                 print(f"Saved last checkpoint at update {update}")
             else:
                 if self.keep_last_n_checkpoints == 0:
