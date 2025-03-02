@@ -279,7 +279,7 @@ class Trainer:
                 collate_fn=lambda batch: collate_fn(batch, self.model.module.vocab_char_map if hasattr(self.model, 'module') else self.model.vocab_char_map),
                 num_workers=2,
                 pin_memory=True,
-                persistent_workers=False,
+                persistent_workers=True,
                 batch_size=self.batch_size,
                 generator=generator,
             )
