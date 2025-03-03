@@ -291,9 +291,7 @@ def load_dataset(
             + "May also the corresponding script cuz different dataset may have different format."
         )
         pre, post = dataset_name.split("_")
-        # from huggingface_hub import notebook_login
-        # notebook_login()
-        print(process_index)
+
         train_dataset = HFDataset(
             # hf_load_dataset(f"{pre}/{pre}", split=f"train.{post}", cache_dir=str(files("f5_tts").joinpath("../../data"))),
             hf_load_dataset("parler-tts/mls_eng", split="train", streaming=True).shard(num_processes, process_index).with_format("torch"),
