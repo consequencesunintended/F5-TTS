@@ -372,7 +372,7 @@ class Trainer:
 
                     global_update += 1
                     progress_bar.update(1)
-                    progress_bar.set_postfix(update=str(global_update), loss=loss.item())
+                    progress_bar.set_postfix(update=str(global_update), loss=loss.item(), lr=self.scheduler.get_last_lr()[0])
 
                 if self.accelerator.is_local_main_process:
                     self.accelerator.log(
