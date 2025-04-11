@@ -401,7 +401,7 @@ class Trainer:
                                 cond=mel_spec[0][:ref_audio_len].unsqueeze(0),
                                 text=infer_text,
                                 duration=ref_audio_len * 2,
-                                steps=nfe_step,
+                                steps=nfe_step * 2,
                                 cfg_strength=cfg_strength,
                                 sway_sampling_coef=sway_sampling_coef,
                             )
