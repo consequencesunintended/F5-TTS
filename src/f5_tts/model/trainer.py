@@ -62,7 +62,7 @@ class Trainer:
         project_config = ProjectConfiguration(
             project_dir=checkpoint_path,
             automatic_checkpoint_naming=True,           # puts files in .../checkpoints/checkpoint_<k>
-            total_limit=self.keep_last_n_checkpoints if self.keep_last_n_checkpoints > 0 else None
+            total_limit=keep_last_n_checkpoints if keep_last_n_checkpoints > 0 else None
         )
 
         if logger == "wandb" and not wandb.api.api_key:
