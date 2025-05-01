@@ -155,6 +155,7 @@ class Trainer:
                 optimizer_state_dict=self.accelerator.unwrap_model(self.optimizer).state_dict(),
                 ema_model_state_dict=self.ema_model.state_dict(),
                 scheduler_state_dict=self.scheduler.state_dict(),
+                dataset_state_dict=self.current_dataloader.state_dict(),
                 update=update,
             )
             if not os.path.exists(self.checkpoint_path):
@@ -328,7 +329,7 @@ class Trainer:
         for epoch in range(skipped_epoch, self.epochs):
             self.model.train()
             progress_bar_initial = 0
-            current_dataloader = train_dataloader
+            self.current_dataloader = train_dataloader
 
             # Set epoch for the batch sampler if it exists
             if hasattr(train_dataloader, "batch_sampler") and hasattr(train_dataloader.batch_sampler, "set_epoch"):
@@ -342,7 +343,7 @@ class Trainer:
                 initial=progress_bar_initial,
             )
 
-            for batch in current_dataloader:
+            for batch in self.current_dataloader:
                 with self.accelerator.accumulate(self.model):
                     text_inputs = batch["text"]
                     mel_spec = batch["mel"].permute(0, 2, 1)
