@@ -330,7 +330,9 @@ class Trainer:
             progress_bar_initial = 0
             current_dataloader = train_dataloader
 
-
+            process_index = current_dataloader.dataset.get_process_index()
+            print(f"Process index: {process_index}")
+            
             # Set epoch for the batch sampler if it exists
             if hasattr(train_dataloader, "batch_sampler") and hasattr(train_dataloader.batch_sampler, "set_epoch"):
                 train_dataloader.batch_sampler.set_epoch(epoch)

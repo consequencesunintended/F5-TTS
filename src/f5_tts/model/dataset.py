@@ -47,6 +47,9 @@ class HFDataset(IterableDataset):
             mel_spec_type=mel_spec_type,
         )
     
+    def get_process_index(self):
+        return self.process_index
+
     def __len__(self):
         return 10808037
 
