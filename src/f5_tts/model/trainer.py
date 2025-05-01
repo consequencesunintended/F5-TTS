@@ -8,8 +8,7 @@ import torch
 import torchaudio
 import wandb
 from accelerate import Accelerator, DataLoaderConfiguration
-from pathlib import Path
-from accelerate.utils import DistributedDataParallelKwargs, ProjectConfiguration
+from accelerate.utils import DistributedDataParallelKwargs
 from ema_pytorch import EMA
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import LinearLR, SequentialLR
@@ -53,19 +52,12 @@ class Trainer:
         is_local_vocoder: bool = False,  # use local path vocoder
         local_vocoder_path: str = "",  # local vocoder path
     ):
-        self.checkpoint_path = "/root/modal_persistant/"
-
         ddp_kwargs = DistributedDataParallelKwargs()
 
         # Initialize the Accelerator for distributed training
         dataloader_config = DataLoaderConfiguration(
             dispatch_batches=False,
             split_batches=False,
-        )
-        project_config = ProjectConfiguration(
-            project_dir=self.checkpoint_path,
-            automatic_checkpoint_naming=True,           # puts files in .../checkpoints/checkpoint_<k>
-            total_limit=keep_last_n_checkpoints if keep_last_n_checkpoints > 0 else None
         )
 
         if logger == "wandb" and not wandb.api.api_key:
@@ -74,7 +66,6 @@ class Trainer:
 
         self.accelerator = Accelerator(
             dataloader_config=dataloader_config,
-            project_config=project_config,
             log_with=logger if logger == "wandb" else None,
             kwargs_handlers=[ddp_kwargs],
             gradient_accumulation_steps=grad_accumulation_steps,
@@ -127,7 +118,7 @@ class Trainer:
         self.save_per_updates = save_per_updates
         self.keep_last_n_checkpoints = keep_last_n_checkpoints
         self.last_per_updates = default(last_per_updates, save_per_updates)
-
+        self.checkpoint_path = "/root/modal_persistant/"
 
         self.batch_size = batch_size
         self.batch_size_type = batch_size_type
@@ -158,33 +149,110 @@ class Trainer:
 
     def save_checkpoint(self, update, last=False):
         self.accelerator.wait_for_everyone()
-        # directory name decides whether it's the rotating or "last" save
-        tag = "last" if last else f"{update}"
-        check_point_check_path = "self.checkpoint_path}/checkpoints"
-        os.makedirs(check_point_check_path, exist_ok=True)
-        self.accelerator.save_state(f"{self.checkpoint_path}/checkpoints/checkpoint_{tag}")
         if self.is_main:
-            print(f"Checkpoint {tag} written at update {update}")
-
+            checkpoint = dict(
+                model_state_dict=self.accelerator.unwrap_model(self.model).state_dict(),
+                optimizer_state_dict=self.accelerator.unwrap_model(self.optimizer).state_dict(),
+                ema_model_state_dict=self.ema_model.state_dict(),
+                scheduler_state_dict=self.scheduler.state_dict(),
+                update=update,
+            )
+            if not os.path.exists(self.checkpoint_path):
+                os.makedirs(self.checkpoint_path)
+            if last:
+                self.accelerator.save(checkpoint, f"{self.checkpoint_path}/model_last.pt")
+                print(f"Saved last checkpoint at update {update}")
+            else:
+                if self.keep_last_n_checkpoints == 0:
+                    return
+                self.accelerator.save(checkpoint, f"{self.checkpoint_path}/model_{update}.pt")
+                if self.keep_last_n_checkpoints > 0:
+                    # Updated logic to exclude pretrained model from rotation
+                    checkpoints = [
+                        f
+                        for f in os.listdir(self.checkpoint_path)
+                        if f.startswith("model_")
+                        and not f.startswith("pretrained_")  # Exclude pretrained models
+                        and f.endswith(".pt")
+                        and f != "model_last.pt"
+                    ]
+                    checkpoints.sort(key=lambda x: int(x.split("_")[1].split(".")[0]))
+                    while len(checkpoints) > self.keep_last_n_checkpoints:
+                        oldest_checkpoint = checkpoints.pop(0)
+                        os.remove(os.path.join(self.checkpoint_path, oldest_checkpoint))
+                        print(f"Removed old checkpoint: {oldest_checkpoint}")
 
     def load_checkpoint(self):
-        ckpt_root = Path(self.checkpoint_path) / "checkpoints"
+        if (
+            not exists(self.checkpoint_path)
+            or not os.path.exists(self.checkpoint_path)
+            or not any(filename.endswith(".pt") for filename in os.listdir(self.checkpoint_path))
+        ):
+            return 0
 
-        # ── 1.  nothing saved yet → start from scratch ─────────────────
-        #     (works for both first run and --overwrite cases)
-        ckpts = sorted(ckpt_root.glob("checkpoint_*"))
-        if not ckpts:
-            return 0                    # <<< no checkpoint, so update = 0
+        self.accelerator.wait_for_everyone()
+        if "model_last.pt" in os.listdir(self.checkpoint_path):
+            latest_checkpoint = "model_last.pt"
+        else:
+            # Updated to consider pretrained models for loading but prioritize training checkpoints
+            all_checkpoints = [
+                f
+                for f in os.listdir(self.checkpoint_path)
+                if (f.startswith("model_") or f.startswith("pretrained_")) and f.endswith(".pt")
+            ]
 
-        # ── 2.  resume from the most recent folder ─────────────────────
-        last = ckpts[-1]
-        self.accelerator.load_state(last)        # restores model/opt/dataloader
-        try:
-            update = int(last.name.split("_")[-1])
-        except ValueError:                       # “checkpoint_last”
+            # First try to find regular training checkpoints
+            training_checkpoints = [f for f in all_checkpoints if f.startswith("model_") and f != "model_last.pt"]
+            if training_checkpoints:
+                latest_checkpoint = sorted(
+                    training_checkpoints,
+                    key=lambda x: int("".join(filter(str.isdigit, x))),
+                )[-1]
+            else:
+                # If no training checkpoints, use pretrained model
+                latest_checkpoint = next(f for f in all_checkpoints if f.startswith("pretrained_"))
+
+        # checkpoint = torch.load(f"{self.checkpoint_path}/{latest_checkpoint}", map_location=self.accelerator.device)  # rather use accelerator.load_state ಥ_ಥ
+        checkpoint = torch.load(f"{self.checkpoint_path}/{latest_checkpoint}", weights_only=True, map_location="cpu")
+
+        # patch for backward compatibility, 305e3ea
+        for key in ["ema_model.mel_spec.mel_stft.mel_scale.fb", "ema_model.mel_spec.mel_stft.spectrogram.window"]:
+            if key in checkpoint["ema_model_state_dict"]:
+                del checkpoint["ema_model_state_dict"][key]
+
+        if self.is_main:
+            self.ema_model.load_state_dict(checkpoint["ema_model_state_dict"])
+
+        if "update" in checkpoint or "step" in checkpoint:
+            # patch for backward compatibility, with before f992c4e
+            if "step" in checkpoint:
+                checkpoint["update"] = checkpoint["step"] // self.grad_accumulation_steps
+                if self.grad_accumulation_steps > 1 and self.is_main:
+                    print(
+                        "F5-TTS WARNING: Loading checkpoint saved with per_steps logic (before f992c4e), will convert to per_updates according to grad_accumulation_steps setting, may have unexpected behaviour."
+                    )
+            # patch for backward compatibility, 305e3ea
+            for key in ["mel_spec.mel_stft.mel_scale.fb", "mel_spec.mel_stft.spectrogram.window"]:
+                if key in checkpoint["model_state_dict"]:
+                    del checkpoint["model_state_dict"][key]
+
+            self.accelerator.unwrap_model(self.model).load_state_dict(checkpoint["model_state_dict"])
+            self.accelerator.unwrap_model(self.optimizer).load_state_dict(checkpoint["optimizer_state_dict"])
+            if self.scheduler:
+                self.scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
+            update = checkpoint["update"]
+        else:
+            checkpoint["model_state_dict"] = {
+                k.replace("ema_model.", ""): v
+                for k, v in checkpoint["ema_model_state_dict"].items()
+                if k not in ["initted", "update", "step"]
+            }
+            self.accelerator.unwrap_model(self.model).load_state_dict(checkpoint["model_state_dict"])
             update = 0
-        return update
 
+        del checkpoint
+        gc.collect()
+        return update
 
     def train(self, train_dataset: Dataset, num_workers=16, resumable_with_seed: int = None):
         if self.log_samples:
@@ -203,8 +271,7 @@ class Trainer:
         else:
             generator = None
 
-        # tell Accelerate it can checkpoint this object
-        self.accelerator.register_for_checkpointing(train_dataset) 
+        
 
         if self.batch_size_type == "sample":
             train_dataloader = DataLoader(
@@ -253,14 +320,6 @@ class Trainer:
         train_dataloader, self.scheduler = self.accelerator.prepare(
             train_dataloader, self.scheduler
         )  # actual multi_gpu updates = single_gpu updates / gpu nums
-
-        self.accelerator.register_for_checkpointing(self.model)
-        self.accelerator.register_for_checkpointing(self.optimizer)
-        self.accelerator.register_for_checkpointing(self.scheduler)
-
-        if hasattr(self, "ema_model"):
-            self.accelerator.register_for_checkpointing(self.ema_model)
-
         start_update = self.load_checkpoint()
         global_update = start_update
 
@@ -269,7 +328,7 @@ class Trainer:
         for epoch in range(skipped_epoch, self.epochs):
             self.model.train()
             progress_bar_initial = 0
-            self.current_dataloader = train_dataloader
+            current_dataloader = train_dataloader
 
             # Set epoch for the batch sampler if it exists
             if hasattr(train_dataloader, "batch_sampler") and hasattr(train_dataloader.batch_sampler, "set_epoch"):
@@ -283,7 +342,7 @@ class Trainer:
                 initial=progress_bar_initial,
             )
 
-            for batch in self.current_dataloader:
+            for batch in current_dataloader:
                 with self.accelerator.accumulate(self.model):
                     text_inputs = batch["text"]
                     mel_spec = batch["mel"].permute(0, 2, 1)
