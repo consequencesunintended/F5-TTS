@@ -199,7 +199,8 @@ class Trainer:
         else:
             generator = None
 
-        
+        # tell Accelerate it can checkpoint this object
+        self.accelerator.register_for_checkpointing(train_dataset) 
 
         if self.batch_size_type == "sample":
             train_dataloader = DataLoader(
@@ -245,8 +246,6 @@ class Trainer:
         self.scheduler = SequentialLR(
             self.optimizer, schedulers=[warmup_scheduler, decay_scheduler], milestones=[warmup_updates]
         )
-        self.accelerator.register_for_checkpointing(train_dataloader)
-        
         train_dataloader, self.scheduler = self.accelerator.prepare(
             train_dataloader, self.scheduler
         )  # actual multi_gpu updates = single_gpu updates / gpu nums
