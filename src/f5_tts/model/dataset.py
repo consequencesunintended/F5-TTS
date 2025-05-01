@@ -46,13 +46,13 @@ class HFDataset(IterableDataset):
             target_sample_rate=target_sample_rate,
             mel_spec_type=mel_spec_type,
         )
-        
+
     # ---------- checkpoint helpers -----------------------------
     def state_dict(self):
-        return self.stream.state_dict()
+        return self.data.state_dict()
 
     def load_state_dict(self, state):
-        self.stream.load_state_dict(state)
+        self.data.load_state_dict(state)
 
     def __len__(self):
         return 10808037
