@@ -147,6 +147,20 @@ class Trainer:
     def is_main(self):
         return self.accelerator.is_main_process
 
+    def _unwrap_dataset(self, ds):
+        """
+        Walk through Accelerate’s wrappers until we hit the real HF dataset
+        that actually owns the iterator state.
+        """
+        while hasattr(ds, "dataset"):
+            ds = ds.dataset          # peel off DataLoaderShard → IterableDatasetShard
+        return ds
+
+    def _get_dataset_state(self):
+        ds = self._unwrap_dataset(self.current_dataloader.dataset)
+        return ds.state_dict() if hasattr(ds, "state_dict") else None
+
+
     def save_checkpoint(self, update, last=False):
         self.accelerator.wait_for_everyone()
         if self.is_main:
@@ -155,7 +169,7 @@ class Trainer:
                 optimizer_state_dict=self.accelerator.unwrap_model(self.optimizer).state_dict(),
                 ema_model_state_dict=self.ema_model.state_dict(),
                 scheduler_state_dict=self.scheduler.state_dict(),
-                dataset_state_dict=self.current_dataloader.state_dict(),
+                dataset_state_dict=self._unwrap_dataset(self.current_dataloader.dataset).state_dict(),
                 update=update,
             )
             if not os.path.exists(self.checkpoint_path):
