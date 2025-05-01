@@ -53,6 +53,8 @@ class Trainer:
         is_local_vocoder: bool = False,  # use local path vocoder
         local_vocoder_path: str = "",  # local vocoder path
     ):
+        self.checkpoint_path = "/root/modal_persistant/"
+
         ddp_kwargs = DistributedDataParallelKwargs()
 
         # Initialize the Accelerator for distributed training
@@ -61,7 +63,7 @@ class Trainer:
             split_batches=False,
         )
         project_config = ProjectConfiguration(
-            project_dir=checkpoint_path,
+            project_dir=self.checkpoint_path,
             automatic_checkpoint_naming=True,           # puts files in .../checkpoints/checkpoint_<k>
             total_limit=keep_last_n_checkpoints if keep_last_n_checkpoints > 0 else None
         )
@@ -125,7 +127,7 @@ class Trainer:
         self.save_per_updates = save_per_updates
         self.keep_last_n_checkpoints = keep_last_n_checkpoints
         self.last_per_updates = default(last_per_updates, save_per_updates)
-        self.checkpoint_path = "/root/modal_persistant/"
+
 
         self.batch_size = batch_size
         self.batch_size_type = batch_size_type
@@ -158,6 +160,8 @@ class Trainer:
         self.accelerator.wait_for_everyone()
         # directory name decides whether it's the rotating or "last" save
         tag = "last" if last else f"{update}"
+        check_point_check_path = "self.checkpoint_path}/checkpoints"
+        os.makedirs(check_point_check_path, exist_ok=True)
         self.accelerator.save_state(f"{self.checkpoint_path}/checkpoints/checkpoint_{tag}")
         if self.is_main:
             print(f"Checkpoint {tag} written at update {update}")
