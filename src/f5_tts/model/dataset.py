@@ -32,6 +32,7 @@ class HFDataset(IterableDataset):
         num_processes=1,  # Add num_processes parameter
         process_index=0,  # Add process_index parameter
     ):
+        self.cursor = 0                     # <-- NEW
         self.data = hf_dataset
         self.target_sample_rate = target_sample_rate
         self.hop_length = hop_length
@@ -46,17 +47,25 @@ class HFDataset(IterableDataset):
             target_sample_rate=target_sample_rate,
             mel_spec_type=mel_spec_type,
         )
-    
-    def get_process_index(self):
-        return self.process_index
+
+    # ---------- NEW: checkpoint hooks ----------
+    def state_dict(self):
+        """Return rank-local position so Accelerate can save it."""
+        return {"cursor": self.cursor}
+
+    def load_state_dict(self, state):
+        """Restore cursor on this rank."""
+        self.cursor = state.get("cursor", 0)
 
     def __len__(self):
         return 10808037
 
     def __iter__(self):
-        for row in self.data:
-            audio = row["audio"]["array"]
-            sample_rate = row["audio"]["sampling_rate"]
+        iterable = self.data.skip(self.cursor)   # HF datasets ≥ 2.4 supports .skip() efficiently :contentReference[oaicite:0]{index=0}
+        
+        for sample in iterable:
+            audio = sample["audio"]["array"]
+            sample_rate = sample["audio"]["sampling_rate"]
             duration = audio.shape[-1] / sample_rate
 
             if duration > 30 or duration < 0.3:
@@ -72,7 +81,9 @@ class HFDataset(IterableDataset):
             mel_spec = self.mel_spectrogram(audio)
             mel_spec = mel_spec.squeeze(0)
 
-            text = row["transcript"]
+            text = sample["transcript"]
+
+            self.cursor += 1
             yield {"mel_spec": mel_spec, "text": text}
 
 
