@@ -172,30 +172,35 @@ class Trainer:
                 dataset_state_dict=self._unwrap_dataset(self.current_dataloader.dataset).state_dict(),
                 update=update,
             )
-            if not os.path.exists(self.checkpoint_path):
-                os.makedirs(self.checkpoint_path)
-            if last:
-                self.accelerator.save(checkpoint, f"{self.checkpoint_path}/model_last.pt")
-                print(f"Saved last checkpoint at update {update}")
-            else:
-                if self.keep_last_n_checkpoints == 0:
-                    return
-                self.accelerator.save(checkpoint, f"{self.checkpoint_path}/model_{update}.pt")
-                if self.keep_last_n_checkpoints > 0:
-                    # Updated logic to exclude pretrained model from rotation
-                    checkpoints = [
-                        f
-                        for f in os.listdir(self.checkpoint_path)
-                        if f.startswith("model_")
-                        and not f.startswith("pretrained_")  # Exclude pretrained models
-                        and f.endswith(".pt")
-                        and f != "model_last.pt"
-                    ]
-                    checkpoints.sort(key=lambda x: int(x.split("_")[1].split(".")[0]))
-                    while len(checkpoints) > self.keep_last_n_checkpoints:
-                        oldest_checkpoint = checkpoints.pop(0)
-                        os.remove(os.path.join(self.checkpoint_path, oldest_checkpoint))
-                        print(f"Removed old checkpoint: {oldest_checkpoint}")
+        else:
+            checkpoint = dict(
+                dataset_state_dict=self._unwrap_dataset(self.current_dataloader.dataset).state_dict(),
+                update=update,
+            )
+        if not os.path.exists(self.checkpoint_path):
+            os.makedirs(self.checkpoint_path)
+        if last:
+            self.accelerator.save(checkpoint, f"{self.checkpoint_path}/model_last_{self.accelerator.process_index}.pt")
+            print(f"Saved last checkpoint at update {update}")
+        else:
+            if self.keep_last_n_checkpoints == 0:
+                return
+            self.accelerator.save(checkpoint, f"{self.checkpoint_path}/model_{update}_{self.accelerator.process_index}.pt")
+            if self.keep_last_n_checkpoints > 0:
+                # Updated logic to exclude pretrained model from rotation
+                checkpoints = [
+                    f
+                    for f in os.listdir(self.checkpoint_path)
+                    if f.startswith("model_")
+                    and not f.startswith("pretrained_")  # Exclude pretrained models
+                    and f.endswith(".pt")
+                    and f != "model_last.pt"
+                ]
+                checkpoints.sort(key=lambda x: int(x.split("_")[1].split(".")[0]))
+                while len(checkpoints) > self.keep_last_n_checkpoints:
+                    oldest_checkpoint = checkpoints.pop(0)
+                    os.remove(os.path.join(self.checkpoint_path, oldest_checkpoint))
+                    print(f"Removed old checkpoint: {oldest_checkpoint}")
 
     def load_checkpoint(self):
         if (
@@ -253,6 +258,12 @@ class Trainer:
 
             self.accelerator.unwrap_model(self.model).load_state_dict(checkpoint["model_state_dict"])
             self.accelerator.unwrap_model(self.optimizer).load_state_dict(checkpoint["optimizer_state_dict"])
+
+            ds = self._unwrap_dataset(self.current_dataloader.dataset)
+
+            if hasattr(ds, "load_state_dict"):
+                ds.load_state_dict(checkpoint.get("dataset_state_dict"))           
+
             if self.scheduler:
                 self.scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
             update = checkpoint["update"]
