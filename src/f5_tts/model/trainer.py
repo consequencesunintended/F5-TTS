@@ -7,8 +7,8 @@ import os
 import torch
 import torchaudio
 import wandb
-from accelerate import Accelerator, DataLoaderConfiguration, ProjectConfiguration
-from accelerate.utils import DistributedDataParallelKwargs
+from accelerate import Accelerator, DataLoaderConfiguration
+from accelerate.utils import DistributedDataParallelKwargs, ProjectConfiguration
 from ema_pytorch import EMA
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import LinearLR, SequentialLR
