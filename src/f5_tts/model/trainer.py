@@ -245,6 +245,8 @@ class Trainer:
         self.scheduler = SequentialLR(
             self.optimizer, schedulers=[warmup_scheduler, decay_scheduler], milestones=[warmup_updates]
         )
+        self.accelerator.register_for_checkpointing(train_dataloader)
+        
         train_dataloader, self.scheduler = self.accelerator.prepare(
             train_dataloader, self.scheduler
         )  # actual multi_gpu updates = single_gpu updates / gpu nums
@@ -252,8 +254,7 @@ class Trainer:
         self.accelerator.register_for_checkpointing(self.model)
         self.accelerator.register_for_checkpointing(self.optimizer)
         self.accelerator.register_for_checkpointing(self.scheduler)
-        self.accelerator.register_for_checkpointing(train_dataloader.dataset)
-        
+
         if hasattr(self, "ema_model"):
             self.accelerator.register_for_checkpointing(self.ema_model)
 
