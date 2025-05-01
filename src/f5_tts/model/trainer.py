@@ -155,6 +155,7 @@ class Trainer:
                 optimizer_state_dict=self.accelerator.unwrap_model(self.optimizer).state_dict(),
                 ema_model_state_dict=self.ema_model.state_dict(),
                 scheduler_state_dict=self.scheduler.state_dict(),
+                dataset_state_dict = self.train_dataloader.dataset.state_dict(),
                 update=update,
             )
             if not os.path.exists(self.checkpoint_path):
@@ -238,6 +239,10 @@ class Trainer:
 
             self.accelerator.unwrap_model(self.model).load_state_dict(checkpoint["model_state_dict"])
             self.accelerator.unwrap_model(self.optimizer).load_state_dict(checkpoint["optimizer_state_dict"])
+
+            if "dataset_state_dict" in checkpoint:
+                self.train_dataloader.dataset.load_state_dict(checkpoint["dataset_state_dict"])
+
             if self.scheduler:
                 self.scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
             update = checkpoint["update"]
@@ -330,9 +335,6 @@ class Trainer:
             progress_bar_initial = 0
             current_dataloader = train_dataloader
 
-            process_index = current_dataloader.dataset.get_process_index()
-            print(f"Process index: {process_index}")
-            
             # Set epoch for the batch sampler if it exists
             if hasattr(train_dataloader, "batch_sampler") and hasattr(train_dataloader.batch_sampler, "set_epoch"):
                 train_dataloader.batch_sampler.set_epoch(epoch)
