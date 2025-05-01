@@ -7,7 +7,7 @@ import os
 import torch
 import torchaudio
 import wandb
-from accelerate import Accelerator, DataLoaderConfiguration
+from accelerate import Accelerator, DataLoaderConfiguration, ProjectConfiguration
 from accelerate.utils import DistributedDataParallelKwargs
 from ema_pytorch import EMA
 from torch.optim import AdamW
