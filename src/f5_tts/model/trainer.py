@@ -164,13 +164,21 @@ class Trainer:
 
 
     def load_checkpoint(self):
-        last = sorted(Path(f"{self.checkpoint_path}/checkpoints").glob("checkpoint_*"))[-1]
-        self.accelerator.load_state(last)
-        # Recover the global update counter from folder name
+        ckpt_root = Path(self.checkpoint_path) / "checkpoints"
+
+        # ── 1.  nothing saved yet → start from scratch ─────────────────
+        #     (works for both first run and --overwrite cases)
+        ckpts = sorted(ckpt_root.glob("checkpoint_*"))
+        if not ckpts:
+            return 0                    # <<< no checkpoint, so update = 0
+
+        # ── 2.  resume from the most recent folder ─────────────────────
+        last = ckpts[-1]
+        self.accelerator.load_state(last)        # restores model/opt/dataloader
         try:
             update = int(last.name.split("_")[-1])
-        except ValueError:
-            update = 0                                    # 'checkpoint_last' case
+        except ValueError:                       # “checkpoint_last”
+            update = 0
         return update
 
 
