@@ -18,6 +18,7 @@ from tqdm import tqdm
 from f5_tts.model import CFM
 from f5_tts.model.dataset import DynamicBatchSampler, collate_fn
 from f5_tts.model.utils import default, exists, tensor_to_list_str, list_str_to_tensor
+from torch.distributed import all_gather_object, barrier
 
 # trainer
 
@@ -158,17 +159,25 @@ class Trainer:
 
     def _get_dataset_state(self):
         ds = self._unwrap_dataset(self.current_dataloader.dataset)
-        
+
         return ds.state_dict() if hasattr(ds, "state_dict") else None
 
     def save_checkpoint(self, update, last=False):
         self.accelerator.wait_for_everyone()
+
+        # each rank gathers its dataset state
+        my_ds_state = self._get_dataset_state()
+        gathered_states = [None] * self.accelerator.num_processes
+        all_gather_object(gathered_states, my_ds_state)
+        barrier()  # ensure gather is complete
+        
         if self.is_main:
             checkpoint = dict(
                 model_state_dict=self.accelerator.unwrap_model(self.model).state_dict(),
                 optimizer_state_dict=self.accelerator.unwrap_model(self.optimizer).state_dict(),
                 ema_model_state_dict=self.ema_model.state_dict(),
                 scheduler_state_dict=self.scheduler.state_dict(),
+                all_dataset_states=gathered_states,   # list indexed by rank
                 update=update,
             )
             if not os.path.exists(self.checkpoint_path):
