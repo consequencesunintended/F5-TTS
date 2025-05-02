@@ -170,7 +170,7 @@ class Trainer:
         gathered_states = [None] * self.accelerator.num_processes
         all_gather_object(gathered_states, my_ds_state)
         barrier()  # ensure gather is complete
-        
+
         if self.is_main:
             checkpoint = dict(
                 model_state_dict=self.accelerator.unwrap_model(self.model).state_dict(),
@@ -351,7 +351,7 @@ class Trainer:
         for epoch in range(skipped_epoch, self.epochs):
             self.model.train()
             progress_bar_initial = 0
-            current_dataloader = train_dataloader
+            self.current_dataloader = train_dataloader
 
             # Set epoch for the batch sampler if it exists
             if hasattr(train_dataloader, "batch_sampler") and hasattr(train_dataloader.batch_sampler, "set_epoch"):
@@ -365,7 +365,7 @@ class Trainer:
                 initial=progress_bar_initial,
             )
 
-            for batch in current_dataloader:
+            for batch in self.current_dataloader:
                 with self.accelerator.accumulate(self.model):
                     text_inputs = batch["text"]
                     mel_spec = batch["mel"].permute(0, 2, 1)
