@@ -211,8 +211,8 @@ class Trainer:
             return 0
 
         self.accelerator.wait_for_everyone()
-        if "model_last.pt" in os.listdir(self.checkpoint_path):
-            latest_checkpoint = "model_last.pt"
+        if f"model_last_{self.accelerator.process_index}.pt" in os.listdir(self.checkpoint_path):
+            latest_checkpoint = f"model_last_{self.accelerator.process_index}.pt"
         else:
             # Updated to consider pretrained models for loading but prioritize training checkpoints
             all_checkpoints = [
