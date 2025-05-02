@@ -205,77 +205,65 @@ class Trainer:
                         os.remove(os.path.join(self.checkpoint_path, oldest_checkpoint))
                         print(f"Removed old checkpoint: {oldest_checkpoint}")
 
-    def load_checkpoint(self):
-        if (
-            not exists(self.checkpoint_path)
-            or not os.path.exists(self.checkpoint_path)
-            or not any(filename.endswith(".pt") for filename in os.listdir(self.checkpoint_path))
-        ):
-            return 0
+        def load_checkpoint(self):
+            # ————————————————————————————————————————————————————————————
+            # 1) Look for the latest checkpoint file, just as before
+            # ————————————————————————————————————————————————————————————
+            if (
+                not os.path.exists(self.checkpoint_path)
+                or not any(f.endswith(".pt") for f in os.listdir(self.checkpoint_path))
+            ):
+                return 0
 
-        self.accelerator.wait_for_everyone()
-        if "model_last.pt" in os.listdir(self.checkpoint_path):
-            latest_checkpoint = "model_last.pt"
-        else:
-            # Updated to consider pretrained models for loading but prioritize training checkpoints
-            all_checkpoints = [
-                f
-                for f in os.listdir(self.checkpoint_path)
-                if (f.startswith("model_") or f.startswith("pretrained_")) and f.endswith(".pt")
-            ]
+            # ensure everyone waits here so filesystem is consistent
+            self.accelerator.wait_for_everyone()
 
-            # First try to find regular training checkpoints
-            training_checkpoints = [f for f in all_checkpoints if f.startswith("model_") and f != "model_last.pt"]
-            if training_checkpoints:
-                latest_checkpoint = sorted(
-                    training_checkpoints,
-                    key=lambda x: int("".join(filter(str.isdigit, x))),
-                )[-1]
+            # pick “last” or highest‐numbered
+            files = os.listdir(self.checkpoint_path)
+            if "model_last.pt" in files:
+                latest = "model_last.pt"
             else:
-                # If no training checkpoints, use pretrained model
-                latest_checkpoint = next(f for f in all_checkpoints if f.startswith("pretrained_"))
+                cks = [f for f in files if f.startswith("model_") and f.endswith(".pt")]
+                latest = sorted(cks, key=lambda x: int(x.split("_")[1].split(".")[0]))[-1]
 
-        # checkpoint = torch.load(f"{self.checkpoint_path}/{latest_checkpoint}", map_location=self.accelerator.device)  # rather use accelerator.load_state ಥ_ಥ
-        checkpoint = torch.load(f"{self.checkpoint_path}/{latest_checkpoint}", weights_only=True, map_location="cpu")
+            path = os.path.join(self.checkpoint_path, latest)
 
-        # patch for backward compatibility, 305e3ea
-        for key in ["ema_model.mel_spec.mel_stft.mel_scale.fb", "ema_model.mel_spec.mel_stft.spectrogram.window"]:
-            if key in checkpoint["ema_model_state_dict"]:
-                del checkpoint["ema_model_state_dict"][key]
+            # ————————————————————————————————————————————————————————————
+            # 2) Load the merged checkpoint on every rank
+            # ————————————————————————————————————————————————————————————
+            checkpoint = torch.load(path, map_location="cpu")
 
-        if self.is_main:
-            self.ema_model.load_state_dict(checkpoint["ema_model_state_dict"])
+            # ————————————————————————————————————————————————————————————
+            # 3) Load model / optimizer / scheduler / EMA
+            # ————————————————————————————————————————————————————————————
+            # (these are identical on every rank)
+            model_sd = checkpoint["model_state_dict"]
+            opt_sd   = checkpoint["optimizer_state_dict"]
+            sched_sd = checkpoint["scheduler_state_dict"]
 
-        if "update" in checkpoint or "step" in checkpoint:
-            # patch for backward compatibility, with before f992c4e
-            if "step" in checkpoint:
-                checkpoint["update"] = checkpoint["step"] // self.grad_accumulation_steps
-                if self.grad_accumulation_steps > 1 and self.is_main:
-                    print(
-                        "F5-TTS WARNING: Loading checkpoint saved with per_steps logic (before f992c4e), will convert to per_updates according to grad_accumulation_steps setting, may have unexpected behaviour."
-                    )
-            # patch for backward compatibility, 305e3ea
-            for key in ["mel_spec.mel_stft.mel_scale.fb", "mel_spec.mel_stft.spectrogram.window"]:
-                if key in checkpoint["model_state_dict"]:
-                    del checkpoint["model_state_dict"][key]
+            self.accelerator.unwrap_model(self.model).load_state_dict(model_sd)
+            self.accelerator.unwrap_model(self.optimizer).load_state_dict(opt_sd)
+            self.scheduler.load_state_dict(sched_sd)
 
-            self.accelerator.unwrap_model(self.model).load_state_dict(checkpoint["model_state_dict"])
-            self.accelerator.unwrap_model(self.optimizer).load_state_dict(checkpoint["optimizer_state_dict"])
-            if self.scheduler:
-                self.scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
-            update = checkpoint["update"]
-        else:
-            checkpoint["model_state_dict"] = {
-                k.replace("ema_model.", ""): v
-                for k, v in checkpoint["ema_model_state_dict"].items()
-                if k not in ["initted", "update", "step"]
-            }
-            self.accelerator.unwrap_model(self.model).load_state_dict(checkpoint["model_state_dict"])
-            update = 0
+            if self.is_main:
+                self.ema_model.load_state_dict(checkpoint["ema_model_state_dict"])
 
-        del checkpoint
-        gc.collect()
-        return update
+            # ————————————————————————————————————————————————————————————
+            # 4) Restore each rank’s dataset state
+            # ————————————————————————————————————————————————————————————
+            # we saved a list indexed by rank
+            all_states = checkpoint["all_dataset_states"]
+            my_state  = all_states[self.accelerator.process_index]
+
+            ds = self._unwrap_dataset(self.current_dataloader.dataset)
+            if hasattr(ds, "load_state_dict") and my_state is not None:
+                ds.load_state_dict(my_state)
+
+            # ————————————————————————————————————————————————————————————
+            # 5) Return the update number for training loop
+            # ————————————————————————————————————————————————————————————
+            return checkpoint.get("update", 0)
+
 
     def train(self, train_dataset: Dataset, num_workers=16, resumable_with_seed: int = None):
         if self.log_samples:
