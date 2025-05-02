@@ -331,6 +331,9 @@ class Trainer:
         train_dataloader, self.scheduler = self.accelerator.prepare(
             train_dataloader, self.scheduler
         )  # actual multi_gpu updates = single_gpu updates / gpu nums
+
+        self.current_dataloader = train_dataloader
+
         start_update = self.load_checkpoint()
         global_update = start_update
 
@@ -339,7 +342,6 @@ class Trainer:
         for epoch in range(skipped_epoch, self.epochs):
             self.model.train()
             progress_bar_initial = 0
-            self.current_dataloader = train_dataloader
 
             # Set epoch for the batch sampler if it exists
             if hasattr(train_dataloader, "batch_sampler") and hasattr(train_dataloader.batch_sampler, "set_epoch"):
