@@ -181,7 +181,7 @@ class Trainer:
             os.makedirs(self.checkpoint_path)
         if last:
             self.accelerator.save(checkpoint, f"{self.checkpoint_path}/model_last_{self.accelerator.process_index}.pt")
-            print(f"Saved last checkpoint at update {update}")
+            print(f"Saved last checkpoint at update {update} for process index {self.accelerator.process_index}")
         else:
             if self.keep_last_n_checkpoints == 0:
                 return
