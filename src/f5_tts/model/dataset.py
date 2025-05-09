@@ -55,7 +55,7 @@ class HFDataset(IterableDataset):
         self.data.load_state_dict(state)
 
     def __len__(self):
-        return 10808037
+        return self.data.info.splits["train"].num_examples
 
     def __iter__(self):
         for row in self.data:
