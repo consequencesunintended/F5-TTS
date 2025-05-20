@@ -168,8 +168,11 @@ class Trainer:
         # each rank gathers its dataset state
         my_ds_state = self._get_dataset_state()
         gathered_states = [None] * self.accelerator.num_processes
-        all_gather_object(gathered_states, my_ds_state)
-        barrier()  # ensure gather is complete
+        if torch.distributed.is_initialized():
+            all_gather_object(gathered_states, my_ds_state)
+            barrier()
+        else:
+            gathered_states = [my_ds_state]
 
         if self.is_main:
             checkpoint = dict(
